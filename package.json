@@ -1,0 +1,23 @@
+{
+  "name": "schedules",
+  "version": "1.0.0",
+  "description": "A fast set implementation using bit vectors.",
+  "main": "build/main/index.js",
+  "repository": "https://github.com/cmather/fast-set",
+  "author": "Chris Mather <chris@eventedmind.com>",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "test": "mocha build/main/*.test.js",
+    "test:watch": "_mocha -w build/main/*.test.js",
+    "docs": "typedoc --out docs"
+  },
+  "dependencies": {
+    "@types/mocha": "^2.2.41",
+    "@types/node": "^8.0.22",
+    "mocha": "^3.5.0",
+    "typedoc": "^0.8.0",
+    "typescript": "^2.4.2"
+  }
+}
