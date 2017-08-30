@@ -1,4 +1,7 @@
-const BITS_PER_NUMBER = Math.log(Number.MAX_SAFE_INTEGER) / Math.log(2);
+// note: even though javascript uses 53 bits for a number, the bitwise operators
+// only support 32 bits. The most significant bit is the sign bit, so we'll only
+// use the lower 31 bits.
+export const BITS_PER_NUMBER = 31;
 
 export class FastSet {
   /**
@@ -9,8 +12,12 @@ export class FastSet {
   /**
    * The number of values in the set.
    */
-  private size: number;
+  public size: number;
 
+  /**
+   * The total capacity for values. This will be all the bits available across
+   * all of the vectors.
+   */
   get capacity(): number {
     return this.vectors.length * BITS_PER_NUMBER;
   }
@@ -32,7 +39,17 @@ export class FastSet {
    * storing the subset keys in a hash table (the superset).
    */
   public toHashKey() {
-    return this.vectors.map(vector => vector.toString(16)).join('');
+    // copy the vectors buffer so we can mutate the copy
+    let vectors = this.vectors.slice();
+
+    // pop off all of the 0s from the end since these don't hold values.
+    while (vectors[vectors.length - 1] === 0) {
+      vectors.pop();
+    }
+
+    // map over the vector numbers and convert to base16 hex strings joined
+    // together.
+    return vectors.map(vector => vector.toString(16)).join('');
   }
 
   /**
@@ -79,7 +96,7 @@ export class FastSet {
    * Returns a new set containing the difference between this set and the other
    * set (all values in this set but not in the other set).
    */
-  public difference(other: FastSet) {
+  public difference(other: FastSet): FastSet {
     return this.operation(other, (vector, otherVector) => vector & ~otherVector);
   }
 
@@ -89,16 +106,20 @@ export class FastSet {
    *
    * @returns A new FastSet containing the values from performing the operation.
    */
-  private operation(other: FastSet, callback: (vector: number, otherVector: number) => number) {
+  private operation(
+    other: FastSet,
+    callback: (vector: number, otherVector: number) => number
+  ): FastSet {
     let values: number[] = [];
+    let maxVectorsLength = Math.max(this.vectors.length, other.vectors.length);
 
-    for (let i = 0; i < this.vectors.length; i++) {
+    for (let i = 0; i < maxVectorsLength; i++) {
       if (i >= other.vectors.length) {
         break;
       }
 
-      let thisVector = this.vectors[i];
-      let otherVector = other.vectors[i];
+      let thisVector = this.vectors[i] || 0;
+      let otherVector = other.vectors[i] || 0;
 
       // get the result from providing both numbers to the callback.
       let result = callback(thisVector, otherVector);
@@ -112,6 +133,9 @@ export class FastSet {
           let offset = i * BITS_PER_NUMBER;
           values.push(offset + bitIndex);
         }
+
+        result >>>= 1;
+        bitIndex++;
       }
     }
 
@@ -124,7 +148,7 @@ export class FastSet {
    * @returns Returns true if the bit was changed. Returns false if it was
    * already on.
    */
-  private on(value) {
+  private on(value: number): boolean {
     this.maybeGrowVectors(value);
 
     let vectorIndex = this.getVectorIndex(value);
@@ -132,7 +156,7 @@ export class FastSet {
 
     // we need to find the position of the value inside this specific vector
     // which is n vectors into the vectors list. So we'll figure out the index
-    // of the value mod the size of a vector (58 bits in javascript).
+    // of the value mod the size of a vector (53 bits in javascript).
     let bitIndex = value % BITS_PER_NUMBER;
 
     // get the value of the existing bit.
@@ -140,10 +164,11 @@ export class FastSet {
 
     // if the bit is 0 then flip it and return true to indicate we changed the
     // bit.
-    if (bit === 0) {
+    if (bit === '0') {
       // now make sure the bit at the bitIndex is set to 1.
       let mask = (1 << bitIndex);
       vector |= mask;
+      this.vectors[vectorIndex] = vector;
       return true;
     }
 
@@ -157,7 +182,7 @@ export class FastSet {
    * @returns Returns true if the bit was changed. Returns false if it was
    * already off.
    */
-  private off(value) {
+  private off(value: number): boolean {
     let vectorIndex = this.getVectorIndex(value);
 
     if (vectorIndex < this.vectors.length) {
@@ -165,9 +190,10 @@ export class FastSet {
       let bitIndex = value % BITS_PER_NUMBER;
       let bit = this.getBit(vector, bitIndex);
 
-      if (bit === 1) {
+      if (bit === '1') {
         let mask = ~vector | (0 << bitIndex);
         vector &= mask;
+        this.vectors[vectorIndex] = vector;
         // return true to indicate we changed the bit.
         return true;
       }
@@ -182,7 +208,7 @@ export class FastSet {
    * the capacity with each growth step. Therefore, if the values being added
    * to the set are sequential we will get O(1) amortized time to add a value.
    */
-  private maybeGrowVectors(value) {
+  private maybeGrowVectors(value: number): void {
     // create empty vectors as needed to accomodate the new position.
     while (value > this.capacity) {
       // each time we increase the size of the vectors, increase it by a factor
@@ -197,12 +223,21 @@ export class FastSet {
     }
   }
 
-  private getVectorIndex(value) {
-    return Math.floor(value / BITS_PER_NUMBER);
+  /**
+   * Gets the index into the vectors buffer for the given value. For example, if
+   * the value is <= 52 the index will be 0 because the first 0-52 (53 total) bits are stored
+   * in the first number in the vectors buffer. If the value is 53 that will be
+   * at index 1, etc.
+   */
+  public getVectorIndex(value: number): number {
+    return Math.abs(Math.ceil(value / BITS_PER_NUMBER - 1));
   }
 
-  private getBit(vector, index) {
+  /**
+   * Get the bit value at the given index in the vector number.
+   */
+  private getBit(vector: number, index: number): string {
     let mask = 1 << index;
-    return (vector & mask) > 0 ? 1 : 0;
+    return (vector & mask) > 0 ? '1' : '0';
   }
 }

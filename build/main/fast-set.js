@@ -1,6 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-var BITS_PER_NUMBER = Math.log(Number.MAX_SAFE_INTEGER) / Math.log(2);
+// note: even though javascript uses 53 bits for a number, the bitwise operators
+// only support 32 bits. The most significant bit is the sign bit, so we'll only
+// use the lower 31 bits.
+exports.BITS_PER_NUMBER = 31;
 var FastSet = (function () {
     /**
      * Construct a new FastSet.
@@ -13,8 +16,12 @@ var FastSet = (function () {
         values.forEach(function (value) { return _this.add(value); });
     }
     Object.defineProperty(FastSet.prototype, "capacity", {
+        /**
+         * The total capacity for values. This will be all the bits available across
+         * all of the vectors.
+         */
         get: function () {
-            return this.vectors.length * BITS_PER_NUMBER;
+            return this.vectors.length * exports.BITS_PER_NUMBER;
         },
         enumerable: true,
         configurable: true
@@ -27,7 +34,15 @@ var FastSet = (function () {
      * storing the subset keys in a hash table (the superset).
      */
     FastSet.prototype.toHashKey = function () {
-        return this.vectors.map(function (vector) { return vector.toString(16); }).join('');
+        // copy the vectors buffer so we can mutate the copy
+        var vectors = this.vectors.slice();
+        // pop off all of the 0s from the end since these don't hold values.
+        while (vectors[vectors.length - 1] === 0) {
+            vectors.pop();
+        }
+        // map over the vector numbers and convert to base16 hex strings joined
+        // together.
+        return vectors.map(function (vector) { return vector.toString(16); }).join('');
     };
     /**
      * Add a value to the set.
@@ -76,12 +91,13 @@ var FastSet = (function () {
      */
     FastSet.prototype.operation = function (other, callback) {
         var values = [];
-        for (var i = 0; i < this.vectors.length; i++) {
+        var maxVectorsLength = Math.max(this.vectors.length, other.vectors.length);
+        for (var i = 0; i < maxVectorsLength; i++) {
             if (i >= other.vectors.length) {
                 break;
             }
-            var thisVector = this.vectors[i];
-            var otherVector = other.vectors[i];
+            var thisVector = this.vectors[i] || 0;
+            var otherVector = other.vectors[i] || 0;
             // get the result from providing both numbers to the callback.
             var result = callback(thisVector, otherVector);
             var bitIndex = 0;
@@ -89,9 +105,11 @@ var FastSet = (function () {
                 if ((result & 1) === 1) {
                     // the value is the current bit index in the current value + the
                     // offset of whatever vector it's in.
-                    var offset = i * BITS_PER_NUMBER;
+                    var offset = i * exports.BITS_PER_NUMBER;
                     values.push(offset + bitIndex);
                 }
+                result >>>= 1;
+                bitIndex++;
             }
         }
         return new FastSet(values);
@@ -108,16 +126,17 @@ var FastSet = (function () {
         var vector = this.vectors[vectorIndex];
         // we need to find the position of the value inside this specific vector
         // which is n vectors into the vectors list. So we'll figure out the index
-        // of the value mod the size of a vector (58 bits in javascript).
-        var bitIndex = value % BITS_PER_NUMBER;
+        // of the value mod the size of a vector (53 bits in javascript).
+        var bitIndex = value % exports.BITS_PER_NUMBER;
         // get the value of the existing bit.
         var bit = this.getBit(vector, bitIndex);
         // if the bit is 0 then flip it and return true to indicate we changed the
         // bit.
-        if (bit === 0) {
+        if (bit === '0') {
             // now make sure the bit at the bitIndex is set to 1.
             var mask = (1 << bitIndex);
             vector |= mask;
+            this.vectors[vectorIndex] = vector;
             return true;
         }
         // otherwise return false to indicate we didn't change the bit.
@@ -133,11 +152,12 @@ var FastSet = (function () {
         var vectorIndex = this.getVectorIndex(value);
         if (vectorIndex < this.vectors.length) {
             var vector = this.vectors[vectorIndex];
-            var bitIndex = value % BITS_PER_NUMBER;
+            var bitIndex = value % exports.BITS_PER_NUMBER;
             var bit = this.getBit(vector, bitIndex);
-            if (bit === 1) {
+            if (bit === '1') {
                 var mask = ~vector | (0 << bitIndex);
                 vector &= mask;
+                this.vectors[vectorIndex] = vector;
                 // return true to indicate we changed the bit.
                 return true;
             }
@@ -163,12 +183,21 @@ var FastSet = (function () {
             }
         }
     };
+    /**
+     * Gets the index into the vectors buffer for the given value. For example, if
+     * the value is <= 52 the index will be 0 because the first 0-52 (53 total) bits are stored
+     * in the first number in the vectors buffer. If the value is 53 that will be
+     * at index 1, etc.
+     */
     FastSet.prototype.getVectorIndex = function (value) {
-        return Math.floor(value / BITS_PER_NUMBER);
+        return Math.abs(Math.ceil(value / exports.BITS_PER_NUMBER - 1));
     };
+    /**
+     * Get the bit value at the given index in the vector number.
+     */
     FastSet.prototype.getBit = function (vector, index) {
         var mask = 1 << index;
-        return (vector & mask) > 0 ? 1 : 0;
+        return (vector & mask) > 0 ? '1' : '0';
     };
     return FastSet;
 }());
