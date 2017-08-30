@@ -29,17 +29,16 @@ describe('FastSet', function () {
             });
             it('should work if value is larger than one vector', function () {
                 var set = new fast_set_1.FastSet;
-                set.add(54);
+                set.add(31);
                 assert.equal(set.size, 1, 'wrong vector size');
                 // note: it's 3 instead of 2 because it grows by 2x each time to achieve
                 // amortized O(1) add time for sequential numbers.
-                assert.equal(set.vectors.length, 3, 'vectors length did not grow');
-                assert.equal(set.capacity, 159, 'vectors capcity did not grow');
-                assert.equal(set.vectors[1], 2, 'wrong vector value');
+                assert.equal(set.vectors.length, 2, 'vectors length did not grow');
+                assert.equal(set.capacity, 2 * 31, 'vectors capcity did not grow');
+                assert.equal(set.vectors[1], 1, 'wrong vector value');
                 set.add(0);
                 assert.equal(set.size, 2, 'wrong vector size');
-                assert.equal(set.capacity, 159, 'vectors capcity did not stay same');
-                assert.equal(set.vectors[0], 1, 'wrong vector value');
+                assert.equal(set.capacity, 2 * 31, 'vectors capcity did not stay same');
             });
             it('should not add the same value twice', function () {
                 var set = new fast_set_1.FastSet;
@@ -75,7 +74,7 @@ describe('FastSet', function () {
             });
             it('should work when one FastSet is larger than another', function () {
                 var setA = new fast_set_1.FastSet([0]);
-                var setB = new fast_set_1.FastSet([53]);
+                var setB = new fast_set_1.FastSet([31]);
                 var result = setA.union(setB);
                 assert.equal(result.vectors[0], 1, 'wrong vector value for union');
                 assert.equal(result.vectors[1], 1, 'wrong vector value for union');
@@ -114,11 +113,11 @@ describe('FastSet', function () {
         });
         describe('#toHashKey()', function () {
             it('should return a hex key representing the set membership', function () {
-                var setA = new fast_set_1.FastSet([0, 68]);
+                var setA = new fast_set_1.FastSet([0, 35]);
                 var key = setA.toHashKey();
                 var expected = [
-                    1,
-                    Math.pow(2, 15).toString(16)
+                    Math.pow(2, 35 % 31).toString(16),
+                    (1).toString(16)
                 ].join('');
                 assert.equal(key, expected, 'wrong hash key');
             });

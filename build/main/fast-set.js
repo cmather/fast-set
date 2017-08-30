@@ -42,7 +42,11 @@ var FastSet = (function () {
         }
         // map over the vector numbers and convert to base16 hex strings joined
         // together.
-        return vectors.map(function (vector) { return vector.toString(16); }).join('');
+        var result = [];
+        // reading the vectors from left to right, push them onto the result from
+        // right to left to represent a concatenated number.
+        vectors.forEach(function (vector) { return result.unshift(vector.toString(16)); });
+        return result.join('');
     };
     /**
      * Add a value to the set.
@@ -108,6 +112,7 @@ var FastSet = (function () {
                     var offset = i * exports.BITS_PER_NUMBER;
                     values.push(offset + bitIndex);
                 }
+                // XXX should this be >>>=1 or >>=1?
                 result >>>= 1;
                 bitIndex++;
             }
@@ -190,7 +195,7 @@ var FastSet = (function () {
      * at index 1, etc.
      */
     FastSet.prototype.getVectorIndex = function (value) {
-        return Math.abs(Math.ceil(value / exports.BITS_PER_NUMBER - 1));
+        return Math.floor(value / exports.BITS_PER_NUMBER);
     };
     /**
      * Get the bit value at the given index in the vector number.

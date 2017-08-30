@@ -16,6 +16,7 @@
   "dependencies": {
     "@types/mocha": "^2.2.41",
     "@types/node": "^8.0.22",
+    "cli-table2": "^0.2.0",
     "mocha": "^3.5.0",
     "typedoc": "^0.8.0",
     "typescript": "^2.4.2"

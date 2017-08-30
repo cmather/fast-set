@@ -49,7 +49,13 @@ export class FastSet {
 
     // map over the vector numbers and convert to base16 hex strings joined
     // together.
-    return vectors.map(vector => vector.toString(16)).join('');
+    let result: Array<string> = [];
+
+    // reading the vectors from left to right, push them onto the result from
+    // right to left to represent a concatenated number.
+    vectors.forEach(vector => result.unshift(vector.toString(16)));
+
+    return result.join('');
   }
 
   /**
@@ -134,6 +140,7 @@ export class FastSet {
           values.push(offset + bitIndex);
         }
 
+        // XXX should this be >>>=1 or >>=1?
         result >>>= 1;
         bitIndex++;
       }
@@ -230,7 +237,7 @@ export class FastSet {
    * at index 1, etc.
    */
   public getVectorIndex(value: number): number {
-    return Math.abs(Math.ceil(value / BITS_PER_NUMBER - 1));
+    return Math.floor(value / BITS_PER_NUMBER);
   }
 
   /**
