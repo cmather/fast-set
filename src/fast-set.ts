@@ -58,6 +58,34 @@ export class FastSet {
     return result.join('');
   }
 
+  public inspect() {
+    return this.toString();
+  }
+
+  public toString() {
+    return `FastSet { ${this.toArray().join(', ')} }`;
+  }
+
+  public toArray(): Array<number> {
+    let result: Array<number> = [];
+
+    for (let idx = 0; idx < this.vectors.length; idx++) {
+      let offset = idx * BITS_PER_NUMBER;
+      this.getValuesForVector(this.vectors[idx], offset).forEach(value => result.push(value));
+    }
+
+    return result;
+  }
+
+  public forEach(callback): FastSet {
+    this.toArray().forEach(callback);
+    return this;
+  }
+
+  public has(value: number): boolean {
+    return this.getBit(value) === '1';
+  }
+
   /**
    * Add a value to the set.
    */
@@ -128,25 +156,31 @@ export class FastSet {
       let otherVector = other.vectors[i] || 0;
 
       // get the result from providing both numbers to the callback.
-      let result = callback(thisVector, otherVector);
-
-      let bitIndex = 0;
-
-      while (result > 0) {
-        if ((result & 1) === 1) {
-          // the value is the current bit index in the current value + the
-          // offset of whatever vector it's in.
-          let offset = i * BITS_PER_NUMBER;
-          values.push(offset + bitIndex);
-        }
-
-        // XXX should this be >>>=1 or >>=1?
-        result >>>= 1;
-        bitIndex++;
-      }
+      let newvector = callback(thisVector, otherVector);
+      let offset = i * BITS_PER_NUMBER;
+      this.getValuesForVector(newvector, offset).forEach(value => values.push(value));
     }
 
     return new FastSet(values);
+  }
+
+  /**
+   * Given a bit vector, return its values.
+   */
+  private getValuesForVector(vector: number, offset: number): Array<number> {
+    let bitIndex = 0;
+    let values: Array<number> = [];
+
+    while (vector > 0) {
+      if ((vector & 1) === 1) {
+        values.push(offset + bitIndex);
+      }
+
+      vector >>>= 1;
+      bitIndex++;
+    }
+
+    return values;
   }
 
   /**
@@ -167,7 +201,7 @@ export class FastSet {
     let bitIndex = value % BITS_PER_NUMBER;
 
     // get the value of the existing bit.
-    let bit = this.getBit(vector, bitIndex);
+    let bit = this.getBit(value);
 
     // if the bit is 0 then flip it and return true to indicate we changed the
     // bit.
@@ -195,7 +229,7 @@ export class FastSet {
     if (vectorIndex < this.vectors.length) {
       let vector = this.vectors[vectorIndex];
       let bitIndex = value % BITS_PER_NUMBER;
-      let bit = this.getBit(vector, bitIndex);
+      let bit = this.getBit(value);
 
       if (bit === '1') {
         let mask = ~vector | (0 << bitIndex);
@@ -243,8 +277,15 @@ export class FastSet {
   /**
    * Get the bit value at the given index in the vector number.
    */
-  private getBit(vector: number, index: number): string {
-    let mask = 1 << index;
+  private getBit(value: number): string {
+    let index = this.getVectorIndex(value);
+    let vector = this.vectors[index] || 0;
+    // we need to find the position of the value inside this specific vector
+    // which is n vectors into the vectors list. So we'll figure out the index
+    // of the value mod the size of a vector.
+    let bitIndex = value % BITS_PER_NUMBER;
+    let mask = 1 << bitIndex;
+
     return (vector & mask) > 0 ? '1' : '0';
   }
 }
