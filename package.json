@@ -1,5 +1,5 @@
 {
-  "name": "schedules",
+  "name": "@cmather/fast-set",
   "version": "1.0.0",
   "description": "A fast set implementation using bit vectors.",
   "main": "build/main/index.js",
